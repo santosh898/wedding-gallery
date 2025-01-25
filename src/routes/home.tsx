@@ -2,56 +2,37 @@ import { useState, useEffect } from "preact/hooks";
 import { Photo } from "../types/photo";
 import { PhotoGrid } from "../components/PhotoGrid";
 import { PhotoModal } from "../components/PhotoModal";
-import { NameDialog } from "../components/NameDialog";
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  doc,
+  setDoc,
+  deleteDoc,
+} from "firebase/firestore";
+import { db } from "../lib/firebase";
+import { route } from "preact-router";
 
-export function Home() {
+type LikedPhoto = {
+  userId: string;
+  photoId: string;
+  timestamp: number;
+};
+
+type HomeProps = {
+  user: any;
+};
+
+export function Home({ user }: HomeProps) {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
-  const [, setUserName] = useState<string | null>(null);
-  const [showNameDialog, setShowNameDialog] = useState(false);
-  const dbName = "weddingPhotosDB";
-  const dbVersion = 1;
-
   useEffect(() => {
-    const initDB = async () => {
-      const request = indexedDB.open(dbName, dbVersion);
-
-      request.onerror = (event) => {
-        console.error("Database error:", event);
-      };
-
-      request.onupgradeneeded = (event: any) => {
-        const db = event.target.result;
-        if (!db.objectStoreNames.contains("reactions")) {
-          db.createObjectStore("reactions", { keyPath: "photoId" });
-        }
-        if (!db.objectStoreNames.contains("comments")) {
-          db.createObjectStore("comments", { keyPath: "id" });
-        }
-        if (!db.objectStoreNames.contains("userData")) {
-          db.createObjectStore("userData", { keyPath: "id" });
-        }
-      };
-
-      request.onsuccess = async (event: any) => {
-        const db = event.target.result;
-        const userDataStore = db
-          .transaction("userData", "readonly")
-          .objectStore("userData");
-
-        const userRequest = userDataStore.get("userName");
-        userRequest.onsuccess = () => {
-          if (userRequest.result) {
-            setUserName(userRequest.result.value);
-          } else {
-            setShowNameDialog(true);
-          }
-        };
-      };
-    };
-
-    initDB();
+    if (!user) {
+      route("/login");
+      return;
+    }
     const fetchPhotos = async () => {
       try {
         const response = await fetch("/photos.json");
@@ -60,45 +41,26 @@ export function Home() {
           filename,
           path: `/out/${filename}`,
           liked: false,
-          comments: [],
         })) as Photo[];
 
-        // Load saved reactions and comments from IndexedDB
-        const request = indexedDB.open(dbName, dbVersion);
-        request.onsuccess = (event: any) => {
-          const db = event.target.result;
-          const reactionsTransaction = db.transaction(
-            ["reactions"],
-            "readonly"
+        if (user) {
+          const q = query(
+            collection(db, "likes"),
+            where("userId", "==", user.uid)
           );
-          const reactionsStore = reactionsTransaction.objectStore("reactions");
-          const commentsTransaction = db.transaction(["comments"], "readonly");
-          const commentsStore = commentsTransaction.objectStore("comments");
+          const querySnapshot = await getDocs(q);
+          const likedPhotos = querySnapshot.docs.map(
+            (doc) => (doc.data() as LikedPhoto).photoId
+          );
 
-          // Get all reactions and comments
-          const getAllReactions = reactionsStore.getAll();
-          const getAllComments = commentsStore.getAll();
-
-          getAllReactions.onsuccess = () => {
-            const savedReactions = getAllReactions.result as {
-              photoId: string;
-              liked: boolean;
-            }[];
-
-            getAllComments.onsuccess = () => {
-              const updatedPhotos = processedPhotos.map((photo) => {
-                const reaction = savedReactions.find(
-                  (r) => r.photoId === photo.filename
-                );
-                return {
-                  ...photo,
-                  liked: reaction ? reaction.liked : false,
-                };
-              });
-              setPhotos(updatedPhotos);
-            };
-          };
-        };
+          const updatedPhotos = processedPhotos.map((photo) => ({
+            ...photo,
+            liked: likedPhotos.includes(photo.filename),
+          }));
+          setPhotos(updatedPhotos);
+        } else {
+          setPhotos(processedPhotos);
+        }
         setLoading(false);
       } catch (error) {
         console.error("Error loading photos:", error);
@@ -106,7 +68,11 @@ export function Home() {
       }
     };
     fetchPhotos();
-  }, []);
+    return () => {
+      setPhotos([]);
+      setLoading(true);
+    };
+  }, [user]);
 
   useEffect(() => {
     if (selectedPhoto) {
@@ -116,19 +82,9 @@ export function Home() {
     }
   }, [selectedPhoto]);
 
-  const handleNameSubmit = async (name: string) => {
-    const request = indexedDB.open(dbName, dbVersion);
-    request.onsuccess = (event: any) => {
-      const db = event.target.result;
-      const transaction = db.transaction(["userData"], "readwrite");
-      const store = transaction.objectStore("userData");
-      store.put({ id: "userName", value: name });
-    };
-    setUserName(name);
-    setShowNameDialog(false);
-  };
-
   const toggleLike = async (photo: Photo) => {
+    if (!user) return;
+
     const updatedPhotos = photos.map((p) => {
       if (p.filename === photo.filename) {
         return { ...p, liked: !p.liked };
@@ -137,18 +93,20 @@ export function Home() {
     });
     setPhotos(updatedPhotos);
 
-    // Update selectedPhoto if the liked photo is currently selected
     if (selectedPhoto && selectedPhoto.filename === photo.filename) {
       setSelectedPhoto({ ...selectedPhoto, liked: !selectedPhoto.liked });
     }
 
-    const request = indexedDB.open(dbName, dbVersion);
-    request.onsuccess = (event: any) => {
-      const db = event.target.result;
-      const transaction = db.transaction(["reactions"], "readwrite");
-      const store = transaction.objectStore("reactions");
-      store.put({ photoId: photo.filename, liked: !photo.liked });
-    };
+    const likeRef = doc(db, "likes", `${user.uid}_${photo.filename}`);
+    if (!photo.liked) {
+      await setDoc(likeRef, {
+        userId: user.uid,
+        photoId: photo.filename,
+        timestamp: Date.now(),
+      });
+    } else {
+      await deleteDoc(likeRef);
+    }
   };
 
   if (loading) {
@@ -157,8 +115,8 @@ export function Home() {
     );
   }
 
-  if (showNameDialog) {
-    return <NameDialog onSubmit={handleNameSubmit} />;
+  if (!user) {
+    return null;
   }
 
   return (
