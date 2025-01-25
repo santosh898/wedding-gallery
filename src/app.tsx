@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from "preact/hooks";
+import { useState, useEffect } from "preact/hooks";
+import Masonry, { ResponsiveMasonry } from "react-responsive-masonry";
 import "./app.css";
 
 interface Comment {
@@ -18,15 +19,11 @@ interface Photo {
 
 export function App() {
   const [photos, setPhotos] = useState<Photo[]>([]);
-  const [visiblePhotos, setVisiblePhotos] = useState<Photo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
   const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
   const [showNameDialog, setShowNameDialog] = useState(false);
   const [newComment, setNewComment] = useState("");
-  const loaderRef = useRef(null);
-  const photosPerPage = 20;
   const dbName = "weddingPhotosDB";
   const dbVersion = 1;
 
@@ -118,7 +115,6 @@ export function App() {
                 };
               });
               setPhotos(updatedPhotos);
-              setVisiblePhotos(updatedPhotos.slice(0, photosPerPage));
             };
           };
         };
@@ -130,32 +126,6 @@ export function App() {
     };
     fetchPhotos();
   }, []);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const first = entries[0];
-        if (first.isIntersecting) {
-          const nextPage = page + 1;
-          const start = (nextPage - 1) * photosPerPage;
-          const end = start + photosPerPage;
-          const newPhotos = photos.slice(start, end);
-
-          if (newPhotos.length > 0) {
-            setVisiblePhotos((prev) => [...prev, ...newPhotos]);
-            setPage(nextPage);
-          }
-        }
-      },
-      { threshold: 1.0 }
-    );
-
-    if (loaderRef.current) {
-      observer.observe(loaderRef.current);
-    }
-
-    return () => observer.disconnect();
-  }, [photos, page]);
 
   useEffect(() => {
     if (selectedPhoto) {
@@ -194,7 +164,6 @@ export function App() {
       return p;
     });
     setPhotos(updatedPhotos);
-    setVisiblePhotos(updatedPhotos.slice(0, page * photosPerPage));
 
     // Update selectedPhoto if the liked photo is currently selected
     if (selectedPhoto && selectedPhoto.filename === photo.filename) {
@@ -232,7 +201,6 @@ export function App() {
     });
 
     setPhotos(updatedPhotos);
-    setVisiblePhotos(updatedPhotos.slice(0, page * photosPerPage));
     setNewComment("");
 
     const request = indexedDB.open(dbName, dbVersion);
@@ -267,34 +235,35 @@ export function App() {
 
   return (
     <div class="gallery">
-      <div class="photos-grid">
-        {visiblePhotos.map((photo, index) => (
-          <div key={index} class="photo-item">
-            <div class="filename-overlay">{photo.filename}</div>
-            <img
-              src={photo.path}
-              alt={`Wedding photo ${index + 1}`}
-              loading="lazy"
-              onClick={() => setSelectedPhoto(photo)}
-              style={{ width: "100%", height: "100%", objectFit: "cover" }}
-            />
-            <div class="photo-actions">
-              <button
-                class={`heart-button ${photo.liked ? "liked" : ""}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleLike(photo);
-                }}
-              >
-                {photo.liked ? "❤️" : "🤍"}
-              </button>
+      <ResponsiveMasonry
+        columnsCountBreakPoints={{ 350: 1, 750: 2, 900: 3, 1200: 4 }}
+      >
+        <Masonry>
+          {photos.map((photo, index) => (
+            <div key={index} class="photo-item">
+              <div class="filename-overlay">{photo.filename}</div>
+              <img
+                src={photo.path}
+                alt={`Wedding photo ${index + 1}`}
+                loading="lazy"
+                onClick={() => setSelectedPhoto(photo)}
+              />
+              <div class="photo-actions">
+                <button
+                  class={`heart-button ${photo.liked ? "liked" : ""}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleLike(photo);
+                  }}
+                >
+                  {photo.liked ? "❤️" : "🤍"}
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
-      <div ref={loaderRef} class="loader">
-        {photos.length > visiblePhotos.length ? "Loading more..." : ""}
-      </div>
+          ))}
+        </Masonry>
+      </ResponsiveMasonry>
+
       {selectedPhoto && (
         <div class="modal-overlay" onClick={() => setSelectedPhoto(null)}>
           <div class="modal-content" onClick={(e) => e.stopPropagation()}>
