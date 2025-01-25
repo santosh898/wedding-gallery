@@ -1,11 +1,3 @@
-#app {
-  max-width: 100%;
-  margin: 0;
-  flex: 1;
-  padding: 1rem;
-  text-align: center;
-}
-
 .gallery {
   width: 100%;
   max-width: 100%;
