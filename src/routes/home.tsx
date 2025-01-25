@@ -1,6 +1,6 @@
 import { useState, useEffect } from "preact/hooks";
 import Masonry, { ResponsiveMasonry } from "react-responsive-masonry";
-import "./home.css";
+// import "./home.css";
 
 interface Comment {
   id: string;
@@ -134,10 +134,6 @@ export function Home() {
     }
   }, [selectedPhoto]);
 
-  if (loading) {
-    return <div class="loading">Loading photos...</div>;
-  }
-
   const handleNameSubmit = async (e: Event) => {
     e.preventDefault();
     const input = (e.target as HTMLFormElement).querySelector("input");
@@ -178,21 +174,33 @@ export function Home() {
     };
   };
 
+  if (loading) {
+    return (
+      <div className="text-center text-gray-600 text-lg">Loading photos...</div>
+    );
+  }
+
   if (showNameDialog) {
     return (
-      <div class="name-dialog-overlay">
-        <div class="name-dialog">
-          <h2>Welcome!</h2>
-          <p>Please enter your name to continue:</p>
-          <form onSubmit={handleNameSubmit}>
+      <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50">
+        <div className="bg-white p-8 rounded-lg shadow-lg">
+          <h2 className="text-2xl font-bold mb-4">Welcome!</h2>
+          <p className="mb-4">Please enter your name to continue:</p>
+          <form onSubmit={handleNameSubmit} className="space-y-4">
             <input
               type="text"
               placeholder="Your name"
               required
               minLength={2}
               maxLength={50}
+              className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring focus:ring-blue-300"
             />
-            <button type="submit">Continue</button>
+            <button
+              type="submit"
+              className="w-full bg-blue-500 text-white py-2 rounded-md hover:bg-blue-600"
+            >
+              Continue
+            </button>
           </form>
         </div>
       </div>
@@ -200,23 +208,31 @@ export function Home() {
   }
 
   return (
-    <div class="gallery">
+    <div className="p-4 min-h-screen">
       <ResponsiveMasonry
         columnsCountBreakPoints={{ 350: 1, 750: 2, 900: 3, 1200: 4 }}
       >
         <Masonry>
           {photos.map((photo, index) => (
-            <div key={index} class="photo-item">
-              <div class="filename-overlay">{photo.filename}</div>
+            <div
+              key={index}
+              className="relative mb-4 break-inside-avoid overflow-hidden rounded-lg shadow-md bg-gray-100"
+            >
+              <div className="absolute top-0 left-0 bg-gradient-to-br from-gray-300 to-gray-500 text-white text-sm px-2 py-1 rounded-br-md z-10">
+                {photo.filename}
+              </div>
               <img
                 src={photo.path}
                 alt={`Wedding photo ${index + 1}`}
                 loading="lazy"
+                className="w-full transition-transform duration-300 hover:scale-105"
                 onClick={() => setSelectedPhoto(photo)}
               />
-              <div class="photo-actions">
+              <div className="absolute bottom-0 left-0 right-0 flex justify-between items-center p-2">
                 <button
-                  class={`heart-button ${photo.liked ? "liked" : ""}`}
+                  className={`text-xl transition-transform duration-200 ${
+                    photo.liked ? "text-pink-500" : "text-white"
+                  } hover:scale-110`}
                   onClick={(e) => {
                     e.stopPropagation();
                     toggleLike(photo);
@@ -231,13 +247,27 @@ export function Home() {
       </ResponsiveMasonry>
 
       {selectedPhoto && (
-        <div class="modal-overlay" onClick={() => setSelectedPhoto(null)}>
-          <div class="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div class="filename-overlay">{selectedPhoto.filename}</div>
-            <img src={selectedPhoto.path} alt={selectedPhoto.filename} />
-            <div class="photo-actions">
+        <div
+          className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50"
+          onClick={() => setSelectedPhoto(null)}
+        >
+          <div
+            className="relative max-w-4xl max-h-[90vh] bg-transparent rounded-lg overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="absolute top-0 left-0 bg-gradient-to-br from-gray-300 to-gray-500 text-white text-sm px-2 py-1 rounded-br-md z-10">
+              {selectedPhoto.filename}
+            </div>
+            <img
+              src={selectedPhoto.path}
+              alt={selectedPhoto.filename}
+              className="block w-full max-h-[90vh]"
+            />
+            <div className="absolute bottom-0 left-0 right-0 flex justify-between items-center p-2">
               <button
-                class={`heart-button ${selectedPhoto.liked ? "liked" : ""}`}
+                className={`text-xl transition-transform duration-200 ${
+                  selectedPhoto.liked ? "text-pink-500" : "text-white"
+                } hover:scale-110`}
                 onClick={(e) => {
                   e.stopPropagation();
                   toggleLike(selectedPhoto);
