@@ -1,7 +1,18 @@
 import { useState, useEffect } from "preact/hooks";
-import { collection, query, getDocs, orderBy } from "firebase/firestore";
+import {
+  collection,
+  query,
+  getDocs,
+  orderBy,
+  doc,
+  setDoc,
+  deleteDoc,
+  getDoc,
+} from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { route } from "preact-router";
+import { PhotoModal } from "../components/PhotoModal";
+import { Photo } from "../types/photo";
 
 type LikedPhoto = {
   userId: string;
@@ -23,6 +34,7 @@ export default function Likes({ user }: LikesProps) {
   const [userLikes, setUserLikes] = useState<UserLikes[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
+  const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -47,11 +59,25 @@ export default function Likes({ user }: LikesProps) {
           likesMap.set(like.userId, photos);
         });
 
-        const userLikesArray = Array.from(likesMap.entries()).map(
-          ([userId, photos]) => ({
-            userId,
-            userName: userId, // In a real app, you'd fetch the user's display name
-            photos,
+        // Fetch user data from Firestore users collection
+        const userLikesArray = await Promise.all(
+          Array.from(likesMap.entries()).map(async ([userId, photos]) => {
+            try {
+              const userDoc = await getDoc(doc(db, "users", userId));
+              const userData = userDoc.data();
+              return {
+                userId,
+                userName: userData?.displayName || userId,
+                photos,
+              };
+            } catch (error) {
+              console.error(`Error fetching user data for ${userId}:`, error);
+              return {
+                userId,
+                userName: userId,
+                photos,
+              };
+            }
           })
         );
 
@@ -65,6 +91,72 @@ export default function Likes({ user }: LikesProps) {
 
     fetchLikes();
   }, [user]);
+
+  const handlePhotoClick = (photoId: string) => {
+    const isLiked = userLikes.some(
+      (ul) => ul.userId === user.uid && ul.photos.includes(photoId)
+    );
+    setSelectedPhoto({
+      filename: photoId,
+      path: `/out/${photoId}`,
+      liked: isLiked,
+    });
+  };
+
+  const toggleLike = async (photo: Photo) => {
+    if (!user) return;
+
+    const likeRef = doc(db, "likes", `${user.uid}_${photo.filename}`);
+
+    if (!photo.liked) {
+      await setDoc(likeRef, {
+        userId: user.uid,
+        photoId: photo.filename,
+        timestamp: Date.now(),
+      });
+
+      // Update local state
+      setUserLikes((prevLikes) => {
+        const userLike = prevLikes.find((ul) => ul.userId === user.uid);
+        if (userLike) {
+          return prevLikes.map((ul) =>
+            ul.userId === user.uid
+              ? { ...ul, photos: [...ul.photos, photo.filename] }
+              : ul
+          );
+        } else {
+          return [
+            ...prevLikes,
+            {
+              userId: user.uid,
+              userName: user.displayName || user.uid,
+              photos: [photo.filename],
+            },
+          ];
+        }
+      });
+    } else {
+      await deleteDoc(likeRef);
+
+      // Update local state
+      setUserLikes((prevLikes) =>
+        prevLikes
+          .map((ul) =>
+            ul.userId === user.uid
+              ? {
+                  ...ul,
+                  photos: ul.photos.filter((id) => id !== photo.filename),
+                }
+              : ul
+          )
+          .filter((ul) => ul.photos.length > 0)
+      );
+    }
+
+    if (selectedPhoto && selectedPhoto.filename === photo.filename) {
+      setSelectedPhoto({ ...selectedPhoto, liked: !selectedPhoto.liked });
+    }
+  };
 
   if (loading) {
     return (
@@ -88,7 +180,7 @@ export default function Likes({ user }: LikesProps) {
             className="border rounded-lg overflow-hidden"
           >
             <button
-              className="w-full px-4 py-2 text-left bg-gray-100 hover:bg-gray-200 transition-colors"
+              className="w-full px-4 py-2 text-left bg-gray-800 hover:bg-gray-900 transition-colors"
               onClick={() =>
                 setExpandedUser(
                   expandedUser === userLike.userId ? null : userLike.userId
@@ -96,18 +188,19 @@ export default function Likes({ user }: LikesProps) {
               }
             >
               <span className="font-semibold">{userLike.userName}</span>
-              <span className="text-gray-600 ml-2">
+              <span className="text-gray-100 ml-2">
                 ({userLike.photos.length} photos)
               </span>
             </button>
             {expandedUser === userLike.userId && (
-              <div className="p-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              <div className="p-4 columns-2 md:columns-3 lg:columns-4 gap-4">
                 {userLike.photos.map((photoId) => (
-                  <div key={photoId} className="aspect-square">
+                  <div key={photoId} className="mb-4 break-inside-avoid">
                     <img
                       src={`/out/${photoId}`}
                       alt={`Photo ${photoId}`}
-                      className="w-full h-full object-cover rounded"
+                      className="w-full h-auto rounded cursor-pointer hover:opacity-90 transition-opacity"
+                      onClick={() => handlePhotoClick(photoId)}
                     />
                   </div>
                 ))}
@@ -116,6 +209,13 @@ export default function Likes({ user }: LikesProps) {
           </div>
         ))}
       </div>
+      {selectedPhoto && (
+        <PhotoModal
+          photo={selectedPhoto}
+          onClose={() => setSelectedPhoto(null)}
+          onToggleLike={toggleLike}
+        />
+      )}
     </div>
   );
 }
