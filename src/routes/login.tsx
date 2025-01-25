@@ -32,7 +32,7 @@ const Login = () => {
     <div className="flex items-center justify-center min-h-screen bg-gray-900">
       <div className="p-8 bg-gray-700 rounded-lg shadow-md">
         <h1 className="mb-6 text-2xl font-bold text-center text-gray-200">
-          Wedding Photo Gallery
+          Login to explore Santosh and Prasanna's Wedding Gallery
         </h1>
         <button
           onClick={handleGoogleLogin}
