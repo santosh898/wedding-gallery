@@ -1,4 +1,4 @@
-import { Router, Route, useRouter, route } from "preact-router";
+import { Router, Route, route } from "preact-router";
 import { Home } from "./routes/home";
 import Likes from "./routes/likes";
 import Login from "./routes/login";
@@ -9,10 +9,6 @@ import { onAuthStateChanged } from "firebase/auth";
 export function App() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-
-  const { ...otehr } = useRouter();
-
-  console.log(otehr);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
