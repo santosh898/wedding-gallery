@@ -195,7 +195,10 @@ export default function Likes({ user }: LikesProps) {
             {expandedUser === userLike.userId && (
               <div className="p-4 columns-2 md:columns-3 lg:columns-4 gap-4">
                 {userLike.photos.map((photoId) => (
-                  <div key={photoId} className="mb-4 break-inside-avoid">
+                  <div key={photoId} className="relative mb-4 break-inside-avoid">
+                    <div className="absolute top-0 left-0 bg-gradient-to-br from-gray-300 to-gray-500 text-white text-sm px-2 py-1 rounded-br-md z-10">
+                      {photoId}
+                    </div>
                     <img
                       src={`/out/${photoId}`}
                       alt={`Photo ${photoId}`}
